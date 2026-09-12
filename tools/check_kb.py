@@ -235,11 +235,12 @@ BAD_CASES = {
     "[命名]": {"A-AgentSystem系统/A1-测试.md": GOOD_PIAN},
     "[路径]": {"A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n见 `docs/复盘/x.md`\n"},
     "[引用]": {"A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n详见第 3 篇。\n"},
-    # 通用模式:内部编号(私有仓名不写进公开脚本,改由本地名单覆盖 —— 见下一案)
-    "[公开卫生]": {"A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n来源:缺陷登记 KD-7 之后。\n"},
+    # 通用模式(用「邮箱」家族走同一条代码路径;刻意避开任何"长得像密钥"的样式 ——
+    # 假密钥样本会触发公网扫描器,也会让读者误以为库里有密钥)
+    "[公开卫生]": {"A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n联系 someone@example.com。\n"},
     # 私有名单路径:样本自带一份 `.kb-forbidden.txt` ⇒ 必须被检出
-    # 非 .md 文件(此前的扫描缺口)—— 密钥样式写在 .sh 里也必须被抓到
-    "[公开卫生]": {"tools/x.sh": "#!/bin/sh\nTOKEN=sk-abcdefghij1234567890\n"},
+    # 非 .md 文件(此前的扫描缺口)—— 违规写在 .sh 里也必须被抓到
+    "[公开卫生]": {"tools/x.sh": "#!/bin/sh\n# contact someone@example.com\n"},
     "[公开卫生] 命中本地私有名单": {
         ".kb-forbidden.txt": "some-private-repo-name\n",
         "A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n来源:some-private-repo-name 的某轮。\n",
