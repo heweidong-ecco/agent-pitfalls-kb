@@ -150,6 +150,7 @@
 | **删除** | 仅当**规则被证伪**(实证不成立)或**并入他篇**;删除**必须**写理由 —— **"删一条教训 = 丢掉一条教训"** |
 | **整库移动/改名** | 允许且预期;**移动后必须做的自检** = §8 的自检句 |
 | **改库前先跑校验** | `python3 tools/check_kb.py`;带 `--self-test` 可做**突变验证**(检查器自身有没有防腐)。CI 与本地 pre-commit **跑的是同一份** |
+| **用户级提醒门(可选)** | `tools/kb-write-guard.sh` —— 装到 `~/.claude/hooks/` 并在 **`~/.claude/settings.json`**注册 `PreToolUse`(matcher `Edit|Write|NotebookEdit`)。它**故意不对称**:主会话 ⇒ `ask`;**子 Agent ⇒ 只注入提示、不 ask**(子 Agent 无人批准,ask 会把它挂死)。⚠️ 为什么必须放**用户级**:settings **只从 cwd 的 `.claude/` 加载,无父目录回退** ⇒ 本库自带的 `.claude/` 在别的项目里不被读 |
 | **本地左移门** | `git config core.hooksPath .githooks` —— ⚠️ **每台机器装一次**,**不随克隆/移动携带**(本库 A1 篇对此有专门教训) |
 | **终门(CI)** | GitHub Actions `kb-check`(push / PR 必跑);`main` 已开**分支保护** ⇒ 改动**须走 PR + 必需检查** |
 | **库被移动/改名之后** | 跑一次 `python3 tools/check_kb.py`:它**不依赖任何绝对路径**;校验通过即说明库**仍自洽**(§8 自检句的可执行版) |
@@ -170,6 +171,7 @@
 
 ## 变更记录
 
+- 2026-09-12 补第四道门(用户级 `PreToolUse` 提醒,配 `tools/kb-write-guard.sh`),并在 CI 之外实测:直推 `main` 被分支保护拒绝、hook 探针被真实触发。
 - 2026-09-12 建立三道门:`tools/check_kb.py`(唯一校验真相)+ CI 终门(`.github/workflows/kb-check.yml`)+ 本地左移门(`.githooks/pre-commit`);并把校验口径写进 §9(含「库移动后跑一次校验」)。
 - 2026-09-12 本库 **`git init` 并首次提交**(此前不在任何版本控制下 —— 库会被移动,历史是唯一回溯锚)。
 - 2026-09-12 补 §8 一行:**叙事里的示意文件名**(举例用的裸文件名)与「要求读者执行的脚本」不同,无需逐个加前缀。
