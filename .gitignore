@@ -1,0 +1,4 @@
+# 本地私有名单:含私有仓名/用户名,不入库(CI 只跑 check_kb.py 里的通用模式)
+.kb-forbidden.txt
+.DS_Store
+_archived-*/
