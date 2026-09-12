@@ -58,8 +58,8 @@ main() {
 }
 
 self_test() {
-  lib="$HOME/Desktop/知识库/18.Agent避坑库-问题解决策略/A-AgentSystem系统/A1-x.md"
-  other="$HOME/Desktop/Product/agent-eval-gate/app/a.py"
+  lib="$HOME/some-place/Agent避坑库/A-AgentSystem系统/A1-x.md"
+  other="$HOME/another-project/app/a.py"
   t() { # $1=json  $2=期望(ask|silent|context)
     out="$(printf '%s' "$1" | KB_WRITE_GUARD=1 sh "$0" 2>/dev/null)"
     case "$2" in

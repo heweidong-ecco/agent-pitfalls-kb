@@ -66,6 +66,23 @@ def _pian_files(root: Path) -> list[Path]:
     return [p for p in sorted(root.glob("*/*.md")) if not p.parent.name.startswith(".")]
 
 
+def _published_files(root: Path) -> list[Path]:
+    """**所有会被公开的文件**(除 `.git/` 外的一切)—— 不只 `.md`。
+
+    ⚠️ 这一层是补出来的缺口:检查器初版只扫 `*/*.md` + README ⇒ `tools/`、`.github/`、
+    `.githooks/` **不在扫描范围**,于是它看不见**自己身边**的泄漏
+    (实测:一个 `.sh` 的自测样本里写了另一个仓库名,检查器一声不吭)。
+    """
+    import subprocess
+    try:                       # 只扫**入库**文件:未入库的本地文件(.kb-forbidden.txt 等)不上公网
+        out = subprocess.run(["git", "-C", str(root), "ls-files"],
+                             capture_output=True, text=True, check=True).stdout
+        return [root / f for f in out.splitlines() if (root / f).is_file()]
+    except Exception:          # 非 git 目录(如自检的临时样本)⇒ 退回文件系统遍历
+        return [x for x in sorted(root.rglob("*"))
+                if x.is_file() and ".git" not in x.parts and not x.name.startswith(".DS_Store")]
+
+
 def _files_for_checks(root: Path) -> list[Path]:
     """参与内容检查的文件:所有篇 + 根 README。README 在第 5 条上豁免。"""
     out = _pian_files(root)
@@ -128,9 +145,7 @@ def check(root: Path) -> list[str]:
         ids = [f"{i}-R{n}" for i, n in RULE_RE.findall(text)]
 
         # ③ 路径(README 豁免:它必须举反例)
-        if p.name != "README.md":
-            for hit in sorted({m for m in PATH_BAN_RE.findall(text)}):
-                errs.append(f"[路径] 出现禁止的路径/项目名 `{hit}`:{rel}")
+
 
         # ④ 引用
         for stale in STALE_REF_RE.findall(text):
@@ -149,8 +164,30 @@ def check(root: Path) -> list[str]:
         if pats:
             extra_re = re.compile("|".join(f"({x})" for x in pats))
 
-    # ⑤ 全局唯一 + 公开卫生(逐文件)
+    # ⑤ 全局唯一 + 公开卫生(**扫全部公开文件**,不只 .md)
     all_ids: dict[str, str] = {}
+    for p in _published_files(root):
+        rel = p.relative_to(root)
+        if p.name == "README.md":
+            # ⚠️ 豁免①:README 是**约束文件**,必须举反例(`docs/复盘/x.md` 这类)
+            continue
+        if rel.as_posix() == "tools/check_kb.py":
+            # ⚠️ 豁免②:本检查器**自身**。它按定义就写着那些模式串与自测样本,
+            # 否则会自己抓自己(实测:扩范围当轮即命中 8 处,全在本文件)。
+            # 代价:本文件里的**真**泄漏不会被它自己发现 ⇒ 该文件改动时请人工过一眼。
+            continue
+        try:
+            text = p.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for name, pat in PUBLIC_PATTERNS.items():
+            hit = re.findall(pat, text)
+            if hit:
+                errs.append(f"[公开卫生] 命中{name}:{rel} → {sorted(set(hit))[:3]}")
+        for hit in sorted({m for m in PATH_BAN_RE.findall(text)}):
+            errs.append(f"[路径] 出现禁止的路径/项目名 `{hit}`:{rel}")
+        if extra_re is not None and extra_re.search(text):
+            errs.append(f"[公开卫生] 命中本地私有名单({FORBIDDEN_FILE}):{rel}")
     for p in _files_for_checks(root):
         text = p.read_text(encoding="utf-8")
         rel = p.relative_to(root)
@@ -160,14 +197,7 @@ def check(root: Path) -> list[str]:
             if rid in all_ids and not str(rel).startswith("README"):
                 errs.append(f"[编号] 规则 ID 重复定义:{rid}({all_ids[rid]} 与 {where})")
             all_ids.setdefault(rid, where)
-        if p.name != "README.md":
-            for name, pat in PUBLIC_PATTERNS.items():
-                hit = re.findall(pat, text)
-                if hit:
-                    errs.append(f"[公开卫生] 命中{name}:{rel} → {sorted(set(hit))[:3]}")
-            if extra_re is not None and extra_re.search(text):
-                # 只报"命中了私有名单",**不回显命中内容**(否则报错日志本身又会泄漏)
-                errs.append(f"[公开卫生] 命中本地私有名单({FORBIDDEN_FILE}):{rel}")
+
     return errs
 
 
@@ -208,6 +238,8 @@ BAD_CASES = {
     # 通用模式:内部编号(私有仓名不写进公开脚本,改由本地名单覆盖 —— 见下一案)
     "[公开卫生]": {"A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n来源:缺陷登记 KD-7 之后。\n"},
     # 私有名单路径:样本自带一份 `.kb-forbidden.txt` ⇒ 必须被检出
+    # 非 .md 文件(此前的扫描缺口)—— 密钥样式写在 .sh 里也必须被抓到
+    "[公开卫生]": {"tools/x.sh": "#!/bin/sh\nTOKEN=sk-abcdefghij1234567890\n"},
     "[公开卫生] 命中本地私有名单": {
         ".kb-forbidden.txt": "some-private-repo-name\n",
         "A-AgentSystem系统/A1-test测试.md": GOOD_PIAN + "\n来源:some-private-repo-name 的某轮。\n",
@@ -226,7 +258,8 @@ def self_test() -> int:
     fails = 0
     with tempfile.TemporaryDirectory() as td:
         good = Path(td) / "good"
-        _mk(good, {"README.md": GOOD_README, "A-AgentSystem系统/A1-x测试.md": GOOD_PIAN})
+        _mk(good, {"README.md": GOOD_README, "A-AgentSystem系统/A1-x测试.md": GOOD_PIAN,
+                   "tools/x.sh": "#!/bin/sh\necho ok\n"})
         errs = check(good)
         if errs:
             fails += 1
