@@ -1,0 +1,27 @@
+name: kb-check
+
+# 终门:push / PR 必跑。**配 main 分支保护后,这道门真的能拦住**——
+# 否则(直推 main 模式)CI 在 push 之后才跑,红叉只等于"记了一笔"
+# (这是本项目同类仓库踩过的坑,也是本库 A1 篇讲的"滞后门")。
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  kb-check:
+    name: kb-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 库校验(结构 / 编号 / 命名 / 路径 / 引用 / 公开卫生)
+        run: python3 tools/check_kb.py
+
+      # 门禁自己也要有防腐:证明这些检查**在违规时真的会变红**(突变验证)
+      - name: 检查器自检(突变验证)
+        run: python3 tools/check_kb.py --self-test

@@ -1,0 +1,13 @@
+#!/bin/sh
+# 避坑库 · 本地左移门(与 CI 跑**同一份**校验脚本)。
+#
+# 为什么需要它:CI 是**滞后门** —— 内容先到仓库,CI 后跑。本地这一道早一步,
+# 把违规挡在提交那一刻(本库 A1 篇:「纪律没有触发点 = 早晚会漏」)。
+#
+# 安装(**不随克隆/移动携带**,每台机器装一次):
+#     git config core.hooksPath .githooks
+python3 tools/check_kb.py || {
+  printf '\n✗ 提交被拒:避坑库校验未通过(详见上方)。约束见 README §7(体例)/ §8(路径)/ §9(维护)。\n'
+  printf '  (绕过:git commit --no-verify —— 请说明为何绕过)\n'
+  exit 1
+}
