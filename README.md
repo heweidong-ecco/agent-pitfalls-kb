@@ -159,7 +159,7 @@
 | **终门(CI)** | GitHub Actions `kb-check`(push / PR 必跑);`main` 已开**分支保护** ⇒ 改动**须走 PR + 必需检查** |
 | **仓库安全设置(公开仓)** | 已开 **Secret scanning + Push protection** ⇒ 误提交密钥会在**推送时被拦**(这是"结构 > 提醒"在仓库层的体现)。⚠️ 若你被 push protection 拦下,**那不是故障** —— 是它按设计工作;确认内容无密钥后按提示放行或改写历史。|
 | **库被移动/改名之后** | 跑一次 `python3 tools/check_kb.py`:它**不依赖任何绝对路径**;校验通过即说明库**仍自洽**(§8 自检句的可执行版) |
-| **提交身份** | 本仓提交**必须用 GitHub `noreply` 身份**(真实邮箱会公开在 commit 元数据里,且**强推清不干净** —— 见 `C1-R5`)。已全局配置,勿改回 |
+| **提交身份** | 本仓提交**必须用 GitHub `noreply` 身份**(真实邮箱会公开在 commit 元数据里,且**强推清不干净** —— 见 `C1-R5`)。**两层都已上结构**:① 本机 `git config --global user.email` = noreply;② 账号层 GitHub → Settings → Emails 已开「Keep my email addresses private」+「Block command line pushes that expose my email」⇒ 网页/API 侧创建的提交(含**合并 PR**)也会被改成 noreply,且带真实邮箱的 push 会被**拒绝**。勿改回 |
 | **本库已纳入 git** | 每次改动 = **一个 commit**(新增/搬规则/改编号,都写进 commit message);**规则搬家必须**在提交信息里带上 `旧 ID → 新 ID` —— 库被移动时 git 历史是唯一可回溯的锚 |
 
 ---
@@ -177,6 +177,7 @@
 
 ## 变更记录
 
+- 2026-09-12 账号层邮箱隐私已开(Keep private + Block CLI pushes):本地与平台**两层**都改用 noreply —— 只会改本地身份时,GitHub 合并 PR 创建的提交**又用回真实邮箱**(实测)。
 - 2026-09-12 公开仓开启 **Secret scanning + Push protection**(并实测一次泄漏排查:发现并修掉 `tools/` 未被扫的范围缺口)。**历史不重写**(业务方决定):残留仅为内部编号与一个仓库名,无凭证类信息。
 - 2026-09-12 补第四道门(用户级 `PreToolUse` 提醒,配 `tools/kb-write-guard.sh`),并在 CI 之外实测:直推 `main` 被分支保护拒绝、hook 探针被真实触发。
 - 2026-09-12 建立三道门:`tools/check_kb.py`(唯一校验真相)+ CI 终门(`.github/workflows/kb-check.yml`)+ 本地左移门(`.githooks/pre-commit`);并把校验口径写进 §9(含「库移动后跑一次校验」)。
