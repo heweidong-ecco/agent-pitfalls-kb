@@ -157,6 +157,7 @@
 | **用户级提醒门(可选)** | `tools/kb-write-guard.sh` —— 装到 `~/.claude/hooks/` 并在 **`~/.claude/settings.json`**注册 `PreToolUse`(matcher `Edit|Write|NotebookEdit`)。它**故意不对称**:主会话 ⇒ `ask`;**子 Agent ⇒ 只注入提示、不 ask**(子 Agent 无人批准,ask 会把它挂死)。⚠️ 为什么必须放**用户级**:settings **只从 cwd 的 `.claude/` 加载,无父目录回退** ⇒ 本库自带的 `.claude/` 在别的项目里不被读 |
 | **本地左移门** | `git config core.hooksPath .githooks` —— ⚠️ **每台机器装一次**,**不随克隆/移动携带**(本库 A1 篇对此有专门教训) |
 | **终门(CI)** | GitHub Actions `kb-check`(push / PR 必跑);`main` 已开**分支保护** ⇒ 改动**须走 PR + 必需检查** |
+| **合并方式** | PR **默认开 auto-merge**(`gh pr merge --auto --squash`)—— CI 绿后**自动合入,无需人工点**;要人工把关的场次由你**显式说明**(默认是开,不设"每次都问")。<br>⚠️ **别与「要不要发」读混**:这条只管**已决定要提的那个 PR 怎么合**;**要不要把内容发出去**仍是**默认关**(见 `A7`)—— 两者不是一回事 |
 | **仓库安全设置(公开仓)** | 已开 **Secret scanning + Push protection** ⇒ 误提交密钥会在**推送时被拦**(这是"结构 > 提醒"在仓库层的体现)。⚠️ 若你被 push protection 拦下,**那不是故障** —— 是它按设计工作;确认内容无密钥后按提示放行或改写历史。|
 | **库被移动/改名之后** | 跑一次 `python3 tools/check_kb.py`:它**不依赖任何绝对路径**;校验通过即说明库**仍自洽**(§8 自检句的可执行版) |
 | **提交身份** | 本仓提交**必须用 GitHub `noreply` 身份**(真实邮箱会公开在 commit 元数据里,且**强推清不干净** —— 见 `C1-R5`)。**两层都已上结构**:① 本机 `git config --global user.email` = noreply;② 账号层 GitHub → Settings → Emails 已开「Keep my email addresses private」+「Block command line pushes that expose my email」⇒ 网页/API 侧创建的提交(含**合并 PR**)也会被改成 noreply,且带真实邮箱的 push 会被**拒绝**。勿改回 |
@@ -177,6 +178,11 @@
 
 ## 变更记录
 
+- 2026-09-13 §9 新增「**合并方式**」一行:**PR 默认开 auto-merge**(业务方 2026-09-13 指示「我没说。默认开 auto」)。
+  起因:此前每开一个 PR 都停下来问"合不合并"、还特意在 PR 正文里写"未开 auto-merge 等你定" ——
+  那是**执行层自加的更保守规矩**,而非哪里有要求(同一套动作在另一方项目里本就写死在锚点中)。
+  ⇒ 按本库一贯做法(**结构 > 提醒**)把它写进 §9,而不是留给"记得";并在同一行钉住**边界**:
+  它只管「已决定要提的 PR **怎么合**」,**"要不要发"仍默认关**(见 `A7`)。
 - 2026-09-12 账号层邮箱隐私已开(Keep private + Block CLI pushes):本地与平台**两层**都改用 noreply —— 只会改本地身份时,GitHub 合并 PR 创建的提交**又用回真实邮箱**(实测)。
 - 2026-09-12 公开仓开启 **Secret scanning + Push protection**(并实测一次泄漏排查:发现并修掉 `tools/` 未被扫的范围缺口)。**历史不重写**(业务方决定):残留仅为内部编号与一个仓库名,无凭证类信息。
 - 2026-09-12 补第四道门(用户级 `PreToolUse` 提醒,配 `tools/kb-write-guard.sh`),并在 CI 之外实测:直推 `main` 被分支保护拒绝、hook 探针被真实触发。
