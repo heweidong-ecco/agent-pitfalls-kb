@@ -15,10 +15,16 @@
 #      **该目录真的存在** ⇒ 只认它:被写路径落在它里面才算命中。
 #      ⚠️ 配了但那个目录已不在 ⇒ **视同没配**,降级到 ② —— 否则这道门会**静默失效**:
 #      配置指着一个已搬走的路径时,"从不命中"与"没人违规"在机器痕迹上完全一样。
+#      ⚠️ **容错别省**:结尾斜杠 / `~` 未展开 / 路径带空格 —— 都会让 `-d` 与前缀匹配
+#      **静默不中**。判据是"**这个配置将来能不能匹配上**",不是"那个目录存不存在"。
+#      (实测:`.dir` 里写 `/x/lib/` ⇒ ① 永远不命中,而诊断行照样打印"① 生效"。)
 #   ② 没配 / 配的目录已不在 ⇒ 按**路径分量**匹配库名(`Agent避坑库` / `agent-pitfalls-kb`):
 #      **某一级目录名整段等于库名**才命中,**不做子串匹配**。
 #      ⚠️ 名字里带库名 ≠ 是库:库外一个**旧版归档目录**、一份**以库名命名的过程记录文件**,
 #      都曾让这道门弹过确认 —— 而门那句提示叫它跑的脚本,在那些地方根本不存在。
+#      ⚠️ **② 是有损的,它区分不了「库」与「库外同名目录」**:库外只要有一级目录名**整段**
+#      等于库名(本仓实测就有一个),② 一样命中。⇒ **② 只算兜底,不算修好**;
+#      **① 一天不生效,误报就一天会回来。** 要的是让 ① 生效,不是把 ② 修得更聪明。
 #      ⚠️ 库改名 / 搬走 ⇒ **改 ① 的那个文件**;② 只认整段相等,**认不出新名字**。
 #
 # 注册(用户级 ~/.claude/settings.json):
@@ -29,10 +35,12 @@
 LIB_NAME_PAT="${KB_LIB_NAME_PAT:-Agent避坑库|agent-pitfalls-kb}"
 DIR_FILE="${KB_LIB_DIR_FILE:-$HOME/.claude/kb-avoid-pitfalls.dir}"
 
-# ① 的锚点:配置了**且目录真的存在**才算数(判据是 `-d`,不是"文件里有一行")
+# ① 的锚点:配置了 · 目录**真的存在** · 去掉结尾斜杠**还能匹配得上** —— 三条都过才算数
+#   (`-d` 只回答"目录在不在",不回答"这个判据将来能不能命中";后者要靠归一化)
 lib_dir() {
   [ -f "$DIR_FILE" ] || return 0
   d="$(sed -n '1p' "$DIR_FILE" | tr -d '\r')"
+  d="${d%/}"   # 去结尾斜杠:`in_dir` 比的是 "$d"/*,留着它 ⇒ 永远匹配不上(静默失效)
   [ -n "$d" ] && [ -d "$d" ] && printf '%s' "$d"
 }
 
@@ -88,13 +96,15 @@ self_test() {
   tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
   mkdir -p "$tmp/lib"
   printf '%s\n' "$tmp/lib"      > "$tmp/dir-live"   # ① 有效:目录存在
+  printf '%s\n' "$tmp/lib/"     > "$tmp/dir-slash"  # ① 有效但**手写带了结尾斜杠** ⇒ 必须仍能命中
   printf '%s\n' "$tmp/gone-dir" > "$tmp/dir-dead"   # ① 失效:目录已不在 ⇒ 该降级到 ②
 
   lib="$tmp/lib/A-AgentSystem系统/A1-x.md"
-  # ⚠️ 下面三条是**形状样本**(占位式路径),不是本机路径 —— README §8:样本不得写本机具体路径
+  # ⚠️ 下面四条是**形状样本**(占位式路径),不是本机路径 —— README §8:样本不得写本机具体路径
   seg="$HOME/some-archive/Agent避坑库-旧版归档-20200101/README.md"   # 分量里带库名,但**不等于**库名
   fn="$HOME/some-project/notes/08-agent-pitfalls-kb-整理.md"         # 文件名里带库名
-  byname="$HOME/some-place/agent-pitfalls-kb/tools/example.sh"       # ② 兜底**该**命中的形态
+  byname="$HOME/some-place/agent-pitfalls-kb/tools/example.sh"       # 名字整段等于库名
+  twin="$HOME/some-notes/agent-pitfalls-kb/整理.md"                  # ⚠️ 库外的**同名整段目录**
   other="$HOME/another-project/app/a.py"
 
   t() { # $1=json  $2=期望(ask|silent|context)  $3=dir 文件
@@ -113,6 +123,11 @@ self_test() {
   t "{\"tool_input\":{\"file_path\":\"$seg\"}}" silent "$tmp/dir-live"
   t "{\"tool_input\":{\"file_path\":\"$fn\"}}" silent "$tmp/dir-live"
   t "{\"tool_input\":{\"file_path\":\"$byname\"}}" silent "$tmp/dir-live"
+  t "{\"tool_input\":{\"file_path\":\"$twin\"}}" silent "$tmp/dir-live"
+  echo "── ① 生效 · 配置里带了结尾斜杠(⇒ 归一化后仍只认它;不归一化则静默失效) ──"
+  t "{\"tool_input\":{\"file_path\":\"$lib\"}}" ask "$tmp/dir-slash"
+  t "{\"tool_input\":{\"file_path\":\"$other\"}}" silent "$tmp/dir-slash"
+  t "{\"tool_input\":{\"file_path\":\"$twin\"}}" silent "$tmp/dir-slash"
   echo "── ② 降级(配置的目录已不在 ⇒ 按分量匹配,且**只**认整段相等) ──"
   t "{\"tool_input\":{\"file_path\":\"$byname\"}}" ask "$tmp/dir-dead"
   t "{\"tool_input\":{\"file_path\":\"$lib\"}}" silent "$tmp/dir-dead"
@@ -120,15 +135,27 @@ self_test() {
   t "{\"tool_input\":{\"file_path\":\"$fn\"}}" silent "$tmp/dir-dead"
   t "{\"tool_input\":{\"notebook_path\":\"$byname\"}}" ask "$tmp/dir-dead"
   t "{}" silent "$tmp/dir-dead"
+  # ⚠️ 下面这条**期望是 ask**,但它**不是"对了"** —— 它是 ② 的**已知代价**:
+  #    `$twin` 与真库在 ② 的判据眼里**同形**(都是一级目录名整段等于库名)⇒ ② 分不出来。
+  #    ⛔ 别把这条改成 silent,也别给 ② 打补丁去猜 —— 唯一的出路是**让 ① 生效**。
+  echo "── ② 已知代价(库外同名整段目录 ⇒ 认不出,必然 ask) ──"
+  t "{\"tool_input\":{\"file_path\":\"$twin\"}}" ask "$tmp/dir-dead"
+  echo "   ⚠️ 上面那条 ✅ 不代表「过」 —— 它代表「② 只剩名字一条判据」。"
+  echo "      要让库外同名目录不再被误报,只能让 ① 生效(见下面诊断行)。"
 
   echo "── 本机现状(诊断,不是断言) ──"
+  raw="$(sed -n '1p' "$DIR_FILE" 2>/dev/null | tr -d '\r')"
   d="$(lib_dir)"
   if [ -n "$d" ]; then
     echo "ℹ️ ① 生效:$DIR_FILE → $d"
+    [ "$raw" = "$d" ] || echo "   (文件里写的是 '$raw' —— 已自动去掉结尾斜杠,否则 ① 会静默失效)"
   else
     echo "ℹ️ ① 未生效:$DIR_FILE 不存在,或它指向的目录已不在 ⇒ 当前走 ② 名字兜底"
     echo "   (要让 ① 生效:把库的**当前**位置写进那个文件 —— 库改名/搬走后必须改它)"
+    echo "   ⚠️ 走 ② 期间:**库外任何一级目录名整段等于库名的路径,都会被误报** ——"
+    echo "      而名字里带库名的归档目录 / 过程记录文件,正是这道门最初误报的两种形状。"
   fi
+  # 与本库 A4-R12 同族:门可能从未生效 / 失效不报警 —— 所以这一行是"诊断",不是"断言"
 }
 [ "$1" = "--self-test" ] && { self_test; exit 0; }
 main
